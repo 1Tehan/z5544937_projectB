@@ -1,0 +1,7 @@
+,sharpe,ci_5pct,ci_95pct
+combined_risk_parity,0.862,-0.273,1.994
+combined_max_sharpe,0.744,-0.381,1.626
+combined_equal_weight,0.701,-0.398,1.885
+equity_equal_weight,0.784,-0.274,1.924
+equity_max_sharpe,0.38,-0.579,1.519
+equity_max_sharpe_tilt_finvader,0.342,-0.594,1.434

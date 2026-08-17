@@ -1,0 +1,18 @@
+fund_id,label,family,method,ann_factor,weight_cap,lookback,rebalance,oos_start,oos_end
+combined_equal_weight,Combined Equal Weight,combined,equal_weight,252,0.2,252,monthly,2021-01-04,2023-12-29
+combined_min_variance,Combined Minimum Variance,combined,min_variance,252,0.2,252,monthly,2021-01-04,2023-12-29
+combined_max_sharpe,Combined Maximum Sharpe,combined,max_sharpe,252,0.2,252,monthly,2021-01-04,2023-12-29
+combined_risk_parity,Combined Risk Parity (ERC),combined,risk_parity,252,0.2,252,monthly,2021-01-04,2023-12-29
+combined_hrp,Combined Hierarchical Risk Parity,combined,hrp,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_equal_weight,Equity-only Equal Weight,equity,equal_weight,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_min_variance,Equity-only Minimum Variance,equity,min_variance,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_max_sharpe,Equity-only Maximum Sharpe,equity,max_sharpe,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_risk_parity,Equity-only Risk Parity (ERC),equity,risk_parity,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_hrp,Equity-only Hierarchical Risk Parity,equity,hrp,252,0.2,252,monthly,2021-01-04,2023-12-29
+crypto_equal_weight,Crypto-only Equal Weight,crypto,equal_weight,365,0.4,365,monthly,2021-01-01,2023-12-31
+crypto_min_variance,Crypto-only Minimum Variance,crypto,min_variance,365,0.4,365,monthly,2021-01-01,2023-12-31
+crypto_max_sharpe,Crypto-only Maximum Sharpe,crypto,max_sharpe,365,0.4,365,monthly,2021-01-01,2023-12-31
+crypto_risk_parity,Crypto-only Risk Parity (ERC),crypto,risk_parity,365,0.4,365,monthly,2021-01-01,2023-12-31
+crypto_hrp,Crypto-only Hierarchical Risk Parity,crypto,hrp,365,0.4,365,monthly,2021-01-01,2023-12-31
+equity_max_sharpe_tilt_vader,Equity Max Sharpe + Sentiment Tilt (VADER),equity,max_sharpe_tilt_vader,252,0.2,252,monthly,2021-01-04,2023-12-29
+equity_max_sharpe_tilt_finvader,Equity Max Sharpe + Sentiment Tilt (Fin-VADER),equity,max_sharpe_tilt_finvader,252,0.2,252,monthly,2021-01-04,2023-12-29
