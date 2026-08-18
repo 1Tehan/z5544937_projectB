@@ -179,6 +179,23 @@ st.markdown(f"""
       border-radius: 10px 10px 0 0; color: {FX['mute']}; padding: 0.4rem 0.9rem; }}
   .stTabs [aria-selected="true"] {{ background: {FX['panel']};
       color: {FX['ink']}; }}
+  /* ------- risk quiz */
+  .fx-crow {{ display:flex; align-items:center; gap:0.6rem; margin:0.5rem 0; }}
+  .fx-crow .q {{ flex:0 0 44%; color:{FX['mute']}; font-size:0.82rem; }}
+  .fx-crow .pts {{ flex:0 0 2.2rem; text-align:right; color:{FX['ink']};
+      font-weight:700; font-variant-numeric:tabular-nums; }}
+  .fx-bar {{ flex:1; height:8px; background:{FX['line']}; border-radius:999px;
+      overflow:hidden; }}
+  .fx-bar-fill {{ height:100%; border-radius:999px;
+      background:linear-gradient(90deg,{FX['teal']},{FX['gold']}); }}
+  .fx-live {{ background:{FX['panel']}; border:1px solid {FX['line']};
+      border-top:3px solid {FX['teal']}; border-radius:14px;
+      padding:1.1rem 1.2rem; box-shadow:0 4px 18px rgba(0,0,0,0.25); }}
+  .fx-live-kpis {{ display:flex; gap:1.1rem; margin-top:0.7rem; flex-wrap:wrap; }}
+  .fx-live-kpis .kl {{ font-size:0.62rem; color:{FX['mute']};
+      text-transform:uppercase; letter-spacing:0.08em; }}
+  .fx-live-kpis .kv {{ font-size:1.25rem; font-weight:700; color:#fff;
+      font-family:'Space Grotesk',sans-serif; font-variant-numeric:tabular-nums; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -774,86 +791,215 @@ elif page == "Fund fact sheet":
 # =================================================================== FIND MY MIX
 elif page == "Find my mix":
     page_header("Risk quiz", "Find my mix",
-                "Three quick questions and FundX suggests a starting blend "
-                "from its combined funds. Illustrative only, from "
-                "out-of-sample history - not personal advice.")
+                "Answer three questions - the suggested blend and its numbers "
+                "update as you go, so you can see exactly how each choice moves "
+                "the returns. Illustrative only, from out-of-sample history.")
 
-    q1 = st.radio("1. If your portfolio fell 20% in a month, you would...",
-                  ["Sell to stop the bleeding", "Feel uneasy but hold",
-                   "Hold", "Buy more - it's on sale"], index=2)
-    q2 = st.radio("2. When do you expect to need this money?",
-                  ["Within 2 years", "3-5 years", "7+ years"], index=1)
-    q3 = st.radio("3. What matters more to you right now?",
-                  ["Protecting what I have", "A balance",
-                   "Growing as fast as possible"], index=1)
+    # --- continuous risk model: three anchors, linearly interpolated ----------
+    ANCHORS = [
+        (0.0, {"combined_min_variance": 0.60, "combined_risk_parity": 0.40}),
+        (0.5, {"combined_risk_parity": 0.50, "combined_equal_weight": 0.30,
+               "combined_min_variance": 0.20}),
+        (1.0, {"combined_max_sharpe": 0.50, "combined_risk_parity": 0.30,
+               "combined_equal_weight": 0.20}),
+    ]
 
-    score = (["Sell to stop the bleeding", "Feel uneasy but hold", "Hold",
-              "Buy more - it's on sale"].index(q1)
-             + ["Within 2 years", "3-5 years", "7+ years"].index(q2)
-             + ["Protecting what I have", "A balance",
-                "Growing as fast as possible"].index(q3))
+    def mix_from_risk(pv):
+        pv = min(1.0, max(0.0, float(pv)))
+        (pa, wa), (pb, wb) = (ANCHORS[0], ANCHORS[1]) if pv <= 0.5 \
+            else (ANCHORS[1], ANCHORS[2])
+        t = 0.0 if pb == pa else (pv - pa) / (pb - pa)
+        keys = sorted(set(wa) | set(wb))
+        wv = np.array([(1 - t) * wa.get(k, 0) + t * wb.get(k, 0) for k in keys])
+        keep = wv > 1e-9
+        keys = [k for k, mk in zip(keys, keep) if mk]
+        wv = wv[keep]
+        return keys, wv / wv.sum()
 
-    PROFILES = {
-        "Cautious": {"combined_min_variance": 0.6,
-                     "combined_risk_parity": 0.4},
-        "Balanced": {"combined_risk_parity": 0.5,
-                     "combined_equal_weight": 0.3,
-                     "combined_min_variance": 0.2},
-        "Growth":   {"combined_max_sharpe": 0.5,
-                     "combined_risk_parity": 0.3,
-                     "combined_equal_weight": 0.2},
-    }
-    profile = "Cautious" if score <= 2 else ("Balanced" if score <= 5
-                                             else "Growth")
-    blend = PROFILES[profile]
+    def mix_series(keys, wv):
+        return RET[keys].dropna(how="all").fillna(0) @ wv
 
-    ids = list(blend)
-    w = np.array([blend[i] for i in ids])
-    mix_ret = (RET[ids].dropna(how="all").fillna(0) @ w)
-    m = metrics_from_returns(mix_ret, 252)
+    def band_of(pv):
+        return "Cautious" if pv < 2.5 / 7 else ("Balanced" if pv < 5.5 / 7
+                                                else "Growth")
+
+    def risk_meter_svg(pv, wd=460, ht=58):
+        mg = 12
+        xx = mg + pv * (wd - 2 * mg)
+        b1 = mg + (2.5 / 7) * (wd - 2 * mg)
+        b2 = mg + (5.5 / 7) * (wd - 2 * mg)
+        y0, bh = 30, 12
+        seg = (f"<rect x='{mg}' y='{y0}' width='{b1-mg:.1f}' height='{bh}' "
+               f"rx='6' fill='{FX['teal']}' opacity='0.30'/>"
+               f"<rect x='{b1:.1f}' y='{y0}' width='{b2-b1:.1f}' height='{bh}' "
+               f"fill='{FX['gold']}' opacity='0.30'/>"
+               f"<rect x='{b2:.1f}' y='{y0}' width='{wd-mg-b2:.1f}' height='{bh}' "
+               f"rx='6' fill='{FX['coral']}' opacity='0.30'/>")
+        labels = (f"<text x='{mg}' y='20' fill='{FX['mute']}' font-size='10' "
+                  f"font-family='Inter'>Cautious</text>"
+                  f"<text x='{wd/2:.0f}' y='20' fill='{FX['mute']}' "
+                  f"font-size='10' text-anchor='middle' "
+                  f"font-family='Inter'>Balanced</text>"
+                  f"<text x='{wd-mg}' y='20' fill='{FX['mute']}' font-size='10' "
+                  f"text-anchor='end' font-family='Inter'>Growth</text>")
+        marker = (f"<polygon points='{xx:.1f},{y0-4} {xx-5:.1f},{y0-12} "
+                  f"{xx+5:.1f},{y0-12}' fill='#fff'/>"
+                  f"<rect x='{xx-1.5:.1f}' y='{y0-2}' width='3' height='{bh+4}' "
+                  f"rx='1.5' fill='#fff'/>")
+        return (f"<svg width='100%' viewBox='0 0 {wd} {ht}' "
+                f"xmlns='http://www.w3.org/2000/svg'>{seg}{labels}{marker}</svg>")
+
+    QS = [
+        ("1. If your portfolio fell 20% in a month, you would...",
+         ["Sell to stop the bleeding", "Feel uneasy but hold", "Hold",
+          "Buy more - it's on sale"], "Reaction to a 20% drop"),
+        ("2. When do you expect to need this money?",
+         ["Within 2 years", "3-5 years", "7+ years"], "Time horizon"),
+        ("3. What matters more to you right now?",
+         ["Protecting what I have", "A balance", "Growing as fast as possible"],
+         "What matters now"),
+    ]
+    MAXS = 7
+
+    ask, live = st.columns([1.1, 1], gap="large")
+    with ask:
+        a1 = st.radio(QS[0][0], QS[0][1], index=2, key="q1")
+        a2 = st.radio(QS[1][0], QS[1][1], index=1, key="q2")
+        a3 = st.radio(QS[2][0], QS[2][1], index=1, key="q3")
+
+    pts = [QS[0][1].index(a1), QS[1][1].index(a2), QS[2][1].index(a3)]
+    score = sum(pts)
+    p = score / MAXS
+    profile = band_of(p)
+    ids, w = mix_from_risk(p)
+    r = mix_series(ids, w)
+    m = metrics_from_returns(r, 252)
+
+    with ask:
+        rows = ""
+        for (q, opts, short), pt in zip(QS, pts):
+            pct = 100 * pt / (len(opts) - 1)
+            rows += (f"<div class='fx-crow'><span class='q'>{short}</span>"
+                     f"<div class='fx-bar'><div class='fx-bar-fill' "
+                     f"style='width:{pct:.0f}%'></div></div>"
+                     f"<span class='pts'>+{pt}</span></div>")
+        st.markdown("<div class='fx-note' style='margin-top:0.5rem'>"
+                    "How your answers add up (each is worth 0-3 risk points):"
+                    "</div>" + rows, unsafe_allow_html=True)
+
+    with live:
+        kv = (f"<div class='k'><div class='kl'>Growth of $1</div>"
+              f"<div class='kv'>${m['growth']:.2f}</div></div>"
+              f"<div class='k'><div class='kl'>Ann. return</div>"
+              f"<div class='kv'>{m['ann_ret']:.1%}</div></div>"
+              f"<div class='k'><div class='kl'>Ann. vol</div>"
+              f"<div class='kv'>{m['ann_vol']:.1%}</div></div>"
+              f"<div class='k'><div class='kl'>Max drawdown</div>"
+              f"<div class='kv'>{m['mdd']:.1%}</div></div>")
+        st.markdown(
+            f"<div class='fx-live'><div class='fx-eyebrow'>Live suggestion</div>"
+            f"<div class='fx-big' style='font-size:2rem'>{profile}</div>"
+            f"{risk_meter_svg(p)}"
+            f"<div class='fx-live-kpis'>{kv}</div></div>",
+            unsafe_allow_html=True)
+        st.button("Use this mix in the builder →", key="use_mix",
+                  on_click=apply_mix,
+                  args=([label_of[i] for i in ids],
+                        [round(x * 100) for x in w]))
 
     st.markdown("<hr class='fx-divider'>", unsafe_allow_html=True)
-    st.markdown(f"<div class='fx-eyebrow'>Your profile</div>"
-                f"<div class='fx-big'>{profile}</div>", unsafe_allow_html=True)
-    c = st.columns(4)
-    kpi_card(c[0], "Suggested growth of $1", f"${m['growth']:.2f}", big=True,
-             accent="teal", spark=spark_svg(growth(mix_ret), FX["teal"]))
-    kpi_card(c[1], "Ann. return", f"{m['ann_ret']:.1%}")
-    kpi_card(c[2], "Ann. vol", f"{m['ann_vol']:.1%}")
-    kpi_card(c[3], "Max drawdown", f"{m['mdd']:.1%}", accent="coral")
 
-    left, right = st.columns([1, 1.4])
-    with left:
-        dfig = base_fig("", "", height=320)
+    # --- how one notch changes the numbers ------------------------------------
+    st.markdown("<div class='fx-eyebrow'>How one answer moves your returns</div>"
+                "<div class='fx-note'>Every answer shifts your risk score by one "
+                "point. Here is what a single point does to the blend, priced on "
+                "the same out-of-sample history.</div>", unsafe_allow_html=True)
+    s_lo, s_hi = max(0, score - 1), min(MAXS, score + 1)
+    scen = []
+    for sc, tag, acc in [(s_lo, "One notch safer", "sky"),
+                         (score, "Your answers", "teal"),
+                         (s_hi, "One notch bolder", "gold")]:
+        i2, w2 = mix_from_risk(sc / MAXS)
+        mm = metrics_from_returns(mix_series(i2, w2), 252)
+        scen.append((tag, acc, mm, band_of(sc / MAXS)))
+    cc = st.columns(3)
+    base = scen[1][2]
+    for col, (tag, acc, mm, bnd) in zip(cc, scen):
+        dg = mm['growth'] - base['growth']
+        dr = (mm['ann_ret'] - base['ann_ret']) * 100
+        delta = ("<div class='fx-note'>&nbsp;</div>" if abs(dg) < 1e-9 else
+                 f"<div class='fx-note'>{'+' if dg >= 0 else ''}${dg:.2f} growth "
+                 f"· {'+' if dr >= 0 else ''}{dr:.1f} pp return</div>")
+        col.markdown(
+            f"<div class='fx-card acc-{acc}'><div class='fx-kpi-label'>{tag}</div>"
+            f"<div class='fx-kpi sm'>${mm['growth']:.2f}</div>"
+            f"<div class='fx-note'>{bnd} · {mm['ann_ret']:.1%} return · "
+            f"{mm['mdd']:.1%} drawdown</div>{delta}</div>",
+            unsafe_allow_html=True)
+
+    st.markdown("<hr class='fx-divider'>", unsafe_allow_html=True)
+
+    # --- donut + spectrum chart -----------------------------------------------
+    c1, c2 = st.columns([1, 1.4])
+    with c1:
+        dfig = base_fig("Your suggested mix", "", height=330)
         dfig.add_trace(go.Pie(labels=[label_of[i] for i in ids], values=w,
                               hole=0.62, marker=dict(colors=CYCLE[:len(ids)]),
                               textinfo="label+percent",
                               textfont=dict(color=FX["ink"])))
         dfig.update_layout(showlegend=False,
-                           margin=dict(l=10, r=10, t=10, b=10))
+                           margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(dfig, width="stretch")
-        st.button("Use this mix in the builder →", key="use_mix",
-                  on_click=apply_mix,
-                  args=([label_of[i] for i in ids],
-                        [round(x * 100) for x in w]))
-    with right:
-        pfig = base_fig("All three profiles, out-of-sample", "Value of $1")
-        for i, (pname, pblend) in enumerate(PROFILES.items()):
-            pids = list(pblend)
-            pw = np.array([pblend[k] for k in pids])
-            gm = growth((RET[pids].dropna(how="all").fillna(0) @ pw))
-            is_me = pname == profile
+    with c2:
+        pfig = base_fig("The full risk spectrum, out-of-sample", "Value of $1")
+        for i, (pp, _wa) in enumerate(ANCHORS):
+            gi = growth(mix_series(*mix_from_risk(pp)))
+            nm = band_of(pp)
             pfig.add_trace(go.Scatter(
-                x=gm.index, y=gm, name=pname,
-                line=dict(color=CYCLE[i], width=3 if is_me else 1.3,
-                          dash=None if is_me else "dot"),
-                opacity=1.0 if is_me else 0.75,
-                hovertemplate="%{y:$.2f}<extra>" + pname + "</extra>"))
+                x=gi.index, y=gi, name=nm,
+                line=dict(color=CYCLE[i], width=1.2, dash="dot"),
+                opacity=0.7,
+                hovertemplate="%{y:$.2f}<extra>" + nm + "</extra>"))
+        gme = growth(r)
+        pfig.add_trace(go.Scatter(
+            x=gme.index, y=gme, name="You",
+            line=dict(color="#ffffff", width=3),
+            hovertemplate="%{y:$.2f}<extra>You</extra>"))
         st.plotly_chart(pfig, width="stretch")
-        st.markdown("<span class='fx-note'>Your profile is the solid line - "
-                    "the dotted ones show what the other answers would have "
-                    "picked, so you can see the trade-off before you commit."
-                    "</span>", unsafe_allow_html=True)
+        st.markdown("<span class='fx-note'>The dotted lines are the three "
+                    "anchor profiles; the white line is your blend. As you "
+                    "change answers it slides between them.</span>",
+                    unsafe_allow_html=True)
+
+    # --- fine-tune ------------------------------------------------------------
+    score_pct = round(p * 100)
+    with st.expander("Fine-tune the mix yourself  ·  go beyond the quiz"):
+        st.markdown("<span class='fx-note'>Your answers put you at "
+                    f"<b>{score_pct}%</b> on the risk dial. Drag to explore any "
+                    "level - every notch re-blends the funds and re-prices the "
+                    "mix from the same out-of-sample history.</span>",
+                    unsafe_allow_html=True)
+        if "mix_dial" not in st.session_state:
+            st.session_state["mix_dial"] = score_pct
+        st.button("↻ Reset to my answers", key="dial_reset",
+                  on_click=lambda v=score_pct: st.session_state.update(
+                      mix_dial=v))
+        dial = st.slider("Risk dial (0 = fully cautious, 100 = full growth)",
+                         0, 100, key="mix_dial")
+        i3, w3 = mix_from_risk(dial / 100)
+        r3 = mix_series(i3, w3)
+        m3 = metrics_from_returns(r3, 252)
+        k = st.columns(5)
+        kpi_card(k[0], "Profile", band_of(dial / 100))
+        kpi_card(k[1], "Growth of $1", f"${m3['growth']:.2f}", accent="teal",
+                 spark=spark_svg(growth(r3), FX["teal"]))
+        kpi_card(k[2], "Ann. return", f"{m3['ann_ret']:.1%}")
+        kpi_card(k[3], "Ann. vol", f"{m3['ann_vol']:.1%}")
+        kpi_card(k[4], "Max drawdown", f"{m3['mdd']:.1%}", accent="coral")
+        st.button("Use this fine-tuned mix in the builder →", key="use_mix2",
+                  on_click=apply_mix,
+                  args=([label_of[i] for i in i3],
+                        [round(x * 100) for x in w3]))
 
 # =================================================================== ALLOCATION
 elif page == "Build your allocation":
