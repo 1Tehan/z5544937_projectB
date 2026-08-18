@@ -47,7 +47,9 @@ st.markdown(f"""
   .fx-hero h1 {{ color: #fff; margin: 0; font-size: 1.55rem; }}
   .fx-hero p {{ margin: 0.25rem 0 0 0; color: #E6EFEA; font-size: 0.92rem; }}
   .fx-card {{ background: #fff; border: 1px solid #E7E2D9; border-radius: 12px;
-             padding: 0.9rem 1rem; box-shadow: 0 1px 4px rgba(18,40,63,0.06); }}
+             padding: 0.9rem 1rem; box-shadow: 0 1px 4px rgba(18,40,63,0.06);
+             color: {FX['ink']}; }}
+  .fx-card p, .fx-card li, .fx-card strong, .fx-card em {{ color: {FX['ink']}; }}
   .fx-kpi {{ font-size: 1.45rem; font-weight: 700; color: {FX['navy']}; }}
   .fx-kpi-label {{ font-size: 0.78rem; color: {FX['steel']}; text-transform: uppercase;
                   letter-spacing: 0.04em; }}
