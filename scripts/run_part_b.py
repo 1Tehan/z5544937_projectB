@@ -8,7 +8,8 @@ Writes (exact required names first):
     results/data/sector_sentiment_index.csv  daily plain-VADER sector index (+ ALL)
     results/tables/performance_metrics.csv   fact-sheet metrics for every fund
 plus additional artifacts (fund_catalog, Fin-VADER index, coverage, fusion
-comparison, lexicon stats) and every required report figure under
+comparison, lexicon stats, reproducible block-bootstrap diagnostics) and every
+required report figure under
 results/figures/. Ends with a key-numbers dump for the report narrative.
 
 Runtime: a few minutes (VADER scores ~147k headlines twice). The deployed app
@@ -28,7 +29,7 @@ import pandas as pd
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src import etl, features, fusion, portfolios, sentiment           # noqa: E402
+from src import etl, evaluation, features, fusion, portfolios, sentiment  # noqa: E402
 from src.plotstyle import CYCLE, PALETTE, fundx_theme, save_fig        # noqa: E402
 
 DATA = ROOT / "results" / "data"
@@ -54,7 +55,7 @@ def main() -> None:
     fundx_theme()
 
     # ---------------------------------------------------------------- data
-    # Station 1-2 run on my Part A modules verbatim: same cleaning rules
+    # Station 1-2 reuse my Part A implementation unchanged; only Part B provenance notes were added
     # (cap 2023-12-31, dedup ticker+date+title, tz-naive news), same
     # compute-returns-then-merge order, same trading calendar.
     print("[1/6] loading + cleaning through the Part A foundation (src/etl.py) ...")
@@ -87,9 +88,10 @@ def main() -> None:
             runs[fid] = portfolios.walk_forward_backtest(
                 panel, method, lookback=lookback, cap=cap, ann_factor=ann)
             runs[fid]["ann"] = ann
+            explicit_cap = cap if method in {"min_variance", "max_sharpe"} else np.nan
             catalog.append({"fund_id": fid, "label": fund_label(family, method),
                             "family": family, "method": method,
-                            "ann_factor": ann, "weight_cap": cap,
+                            "ann_factor": ann, "weight_cap": explicit_cap,
                             "lookback": lookback, "rebalance": "monthly",
                             "oos_start": str(runs[fid]["daily"].index[0].date()),
                             "oos_end": str(runs[fid]["daily"].index[-1].date())})
@@ -127,7 +129,7 @@ def main() -> None:
                         "label": ("Equity Max Sharpe + Sentiment Tilt "
                                   + ("(Fin-VADER)" if tag == "finvader" else "(VADER)")),
                         "family": "equity", "method": f"max_sharpe_tilt_{tag}",
-                        "ann_factor": 252, "weight_cap": CAP_WIDE,
+                        "ann_factor": 252, "weight_cap": np.nan,
                         "lookback": LOOKBACK_EQ, "rebalance": "monthly",
                         "oos_start": str(runs[fid]["daily"].index[0].date()),
                         "oos_end": str(runs[fid]["daily"].index[-1].date())})
@@ -176,6 +178,20 @@ def main() -> None:
                   "equity_max_sharpe_tilt_finvader"]
     fus = perf[perf["fund_id"].isin(fusion_ids)].copy()
     fus.to_csv(TABLES / "fusion_before_after.csv", index=False)
+
+    # Reproducible robustness extension: same 21-day date blocks are resampled
+    # for every selected equity-calendar fund in a draw, preserving paired
+    # dependence. This is intentionally separate from the core OOS backtest.
+    boot_funds = [
+        "combined_risk_parity", "combined_max_sharpe",
+        "combined_equal_weight", "equity_equal_weight",
+        "equity_max_sharpe", "equity_max_sharpe_tilt_finvader",
+    ]
+    boot, boot_paired = evaluation.moving_block_bootstrap_sharpe(
+        fund_returns, boot_funds, periods_per_year=252,
+        block_length=21, n_boot=2000, seed=42)
+    boot.to_csv(TABLES / "sharpe_bootstrap.csv")
+    boot_paired.to_csv(TABLES / "sharpe_bootstrap_paired.csv")
 
     # --------------------------------------------------------- figures
     print("[6/6] figures ...")
@@ -230,20 +246,22 @@ def main() -> None:
     save_fig(fig, FIGS / "weights_over_time_combined_max_sharpe.png", period)
 
     # 5. Sharpe barplot across funds and methods (required)
-    fig, ax = plt.subplots(figsize=(9, 4.6))
+    # Horizontal grouped bars keep the long method labels fully readable in the report.
+    fig, ax = plt.subplots(figsize=(9, 4.8))
     base15 = perf[perf["method"].isin(METHODS)]
     piv = base15.pivot(index="method", columns="family", values="sharpe").loc[METHODS]
-    x = np.arange(len(piv))
+    y = np.arange(len(piv))
     for i, fam in enumerate(["equity", "crypto", "combined"]):
-        ax.bar(x + (i - 1) * 0.26, piv[fam], width=0.24,
-               label=FAMILY_LABEL[fam],
-               color=[PALETTE["navy"], PALETTE["gold"], PALETTE["teal"]][i])
-    ax.set_xticks(x, [portfolios.METHOD_LABEL[m] for m in METHODS],
-                  rotation=12, ha="right")
-    ax.axhline(0, color=PALETTE["ink"], lw=0.8)
+        ax.barh(y + (i - 1) * 0.22, piv[fam], height=0.20,
+                label=FAMILY_LABEL[fam],
+                color=[PALETTE["navy"], PALETTE["gold"], PALETTE["teal"]][i])
+    ax.set_yticks(y, [portfolios.METHOD_LABEL[m] for m in METHODS])
+    ax.invert_yaxis()
+    ax.axvline(0, color=PALETTE["ink"], lw=0.8)
     ax.set_title("Out-of-sample Sharpe ratio across funds and methods (rf = 0)")
-    ax.set_ylabel("Sharpe ratio (annualised)")
-    ax.legend()
+    ax.set_xlabel("Sharpe ratio (annualised)")
+    ax.legend(ncols=3, loc="lower center", bbox_to_anchor=(0.5, -0.20))
+    fig.subplots_adjust(left=0.24, bottom=0.22)
     save_fig(fig, FIGS / "sharpe_barplot.png", period)
 
     # 6. sector sentiment index (required)

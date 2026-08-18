@@ -41,7 +41,8 @@ requirements-dev.txt only).
   `results/data/fund_returns.csv`, `results/data/fund_weights.csv`,
   `results/data/sector_sentiment_index.csv`,
   `results/tables/performance_metrics.csv` (+ catalog, Fin-VADER index,
-  coverage, fusion table, lexicon stats, and all report figures).
+  coverage, fusion table, lexicon stats, reproducible block-bootstrap tables,
+  and all report figures).
 
 ## Deploy + hand in
 

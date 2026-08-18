@@ -16,3 +16,6 @@ data/
 # Secrets / local
 .streamlit/secrets.toml
 .env
+
+.pytest_cache/
+.DS_Store

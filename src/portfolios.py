@@ -1,8 +1,10 @@
 """Station 3 - the funds: optimal portfolios + walk-forward OOS backtest.
 
 Design choices (all stated in the report):
-  * Long-only, fully invested. Per-asset weight cap so max-Sharpe cannot
-    collapse into one name (20% for 50-60 asset funds, 40% for crypto-only).
+  * Long-only, fully invested. Minimum-variance and maximum-Sharpe use an
+    explicit per-asset cap (20% for equity/combined, 40% for crypto-only).
+    Equal Weight is below those thresholds by construction; ERC and HRP are
+    left unclipped so their defining allocation rules are not distorted.
   * Mean/covariance are ANNUALISED before optimisation (tiny daily-return
     covariances can stall SLSQP below its tolerance - a known trap), and the
     covariance is shrunk 10% toward its diagonal for numerical stability.
@@ -93,7 +95,9 @@ def hrp(mu: np.ndarray, cov: np.ndarray, cap: float,
 
     Cluster assets on correlation distance, quasi-diagonalise, then allocate
     top-down by inverse cluster variance. Needs no matrix inversion, so it is
-    robust when the covariance is noisy (60 assets, 252-day window).
+    robust when the covariance is noisy (60 assets, 252-day window). No
+    post-hoc cap is applied because clipping would alter the hierarchy-derived
+    weights; realised HRP weights remain below the product thresholds here.
     """
     std = np.sqrt(np.diag(cov))
     corr = cov / np.outer(std, std)

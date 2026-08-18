@@ -1,4 +1,4 @@
-"""[Carried over verbatim from my Part A - Station 1 is the foundation Part B runs on.]
+"""Part A Station 1 logic is reused unchanged in Part B; this line is only a provenance note.
 
 Station 1 - ETL: load, clean, and integrity-check the data.
 

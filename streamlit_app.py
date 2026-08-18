@@ -1487,8 +1487,13 @@ Variance* - built from daily adjusted-close returns of 50 US large-caps
 (10 sectors) and 10 major cryptocurrencies, 2020-2023.
 
 **The rules.** Five methods: Equal Weight, Minimum Variance, Maximum Sharpe,
-Risk Parity (equal risk contribution), and Hierarchical Risk Parity. Long-only,
-fully invested, per-asset cap 20% (40% for crypto-only). Risk-free rate 0.
+Risk Parity (equal risk contribution), and Hierarchical Risk Parity. All are
+long-only and fully invested. Minimum Variance and Maximum Sharpe explicitly
+enforce a 20% per-asset cap (40% for crypto-only); Equal Weight is below those
+thresholds by construction, while ERC and HRP are left unclipped so their
+defining rules are not distorted (their realised weights remain below the same
+thresholds in this sample). Min Variance, Max Sharpe and ERC use 10% diagonal
+covariance shrinkage for numerical stability. Risk-free rate 0.
 
 **Out-of-sample discipline.** Walk-forward backtest: on the first trading day
 of each month, weights are re-estimated from the previous 252 trading days
