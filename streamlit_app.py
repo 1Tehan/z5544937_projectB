@@ -7,7 +7,7 @@ The deployed app is a READER: every fund, metric and sentiment series is
 precomputed by `python scripts/run_part_b.py` into results/ (committed), so
 the app never runs an optimiser or VADER (the free tier cannot). The one
 network touch is an optional expander on the Methodology page that loads the
-hosted price data through src/data_access.py, demonsgit add streamlit_app.py .streamlit/config.tomltrating the provided
+hosted price data through src/data_access.py, demonstrating the provided
 helper end to end.
 
 Design system: the FundX visual language is my own (src/plotstyle.py evolved
