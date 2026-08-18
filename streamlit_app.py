@@ -103,7 +103,8 @@ st.markdown(f"""
 
   /* ------- hero + page headers */
   .fx-hero {{ position: relative; overflow: hidden;
-      background: linear-gradient(120deg, {FX['panel']} 0%, #0E4C4C 100%);
+      background: radial-gradient(130% 150% at 0% 0%, #0E4C4C 0%,
+          {FX['panel']} 52%, {FX['navy']} 100%);
       border: 1px solid {FX['line']}; border-radius: 18px;
       padding: 1.6rem 1.8rem 1.5rem; margin-bottom: 1.0rem;
       box-shadow: 0 10px 40px rgba(0,0,0,0.35); }}
@@ -125,9 +126,11 @@ st.markdown(f"""
   /* ------- cards, KPIs, pills */
   .fx-card {{ background: {FX['panel']}; border: 1px solid {FX['line']};
       border-radius: 14px; padding: 1.0rem 1.15rem; height: 100%;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.25); color: {FX['ink']};
-      transition: transform 0.15s ease, border-color 0.15s ease; }}
-  .fx-card:hover {{ transform: translateY(-2px); border-color: {FX['teal']}55; }}
+      box-shadow: 0 6px 22px rgba(0,0,0,0.30); color: {FX['ink']};
+      transition: transform 0.15s ease, border-color 0.15s ease,
+          box-shadow 0.15s ease; }}
+  .fx-card:hover {{ transform: translateY(-2px); border-color: {FX['teal']}66;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.38), 0 0 0 1px {FX['teal']}22; }}
   .fx-card p, .fx-card li, .fx-card strong, .fx-card em {{ color: {FX['ink']}; }}
   .fx-card.acc-teal  {{ border-top: 3px solid {FX['teal']}; }}
   .fx-card.acc-gold  {{ border-top: 3px solid {FX['gold']}; }}
@@ -149,8 +152,9 @@ st.markdown(f"""
   .fx-pill.gold {{ background: {FX['gold']}1f; color: {FX['gold']};
       border-color: {FX['gold']}55; }}
   .fx-note {{ color: {FX['mute']}; font-size: 0.82rem; line-height: 1.5; }}
-  .fx-divider {{ height: 1px; background: {FX['line']}; border: 0;
-      margin: 1.3rem 0 1.0rem 0; }}
+  .fx-divider {{ height: 1px; border: 0; margin: 1.3rem 0 1.0rem 0;
+      background: linear-gradient(90deg, transparent, {FX['line']} 15%,
+          {FX['line']} 85%, transparent); }}
   .fx-spark {{ margin-top: 0.35rem; }}
 
   /* ------- journey steps (Overview) */
@@ -293,11 +297,44 @@ def spark_svg(series: pd.Series, color: str, width: int = 150,
             f"stroke-width='1.8' stroke-linejoin='round'/></svg>")
 
 
+STRESS_EVENTS = [
+    ("2022-06-13", "2022 selloff", "macro"),
+    ("2023-03-10", "SVB", "macro"),
+    ("2022-05-09", "Terra", "crypto"),
+    ("2022-11-08", "FTX", "crypto"),
+]
+
+
+def add_events(fig, family, x0, x1):
+    """Mark in-range stress periods with a faint dashed line + label."""
+    try:
+        x0, x1 = pd.Timestamp(x0), pd.Timestamp(x1)
+        scope = "crypto" if family == "crypto" else "macro"
+        for ds, lab, sc in STRESS_EVENTS:
+            if sc != scope:
+                continue
+            d = pd.Timestamp(ds)
+            if x0 <= d <= x1:
+                fig.add_vline(x=d, line_width=1, line_dash="dot",
+                              line_color=FX["steel"])
+                fig.add_annotation(x=d, y=1, yref="paper", yanchor="bottom",
+                                   text=lab, showarrow=False,
+                                   font=dict(color=FX["mute"], size=10))
+    except Exception:
+        pass
+    return fig
+
+
 def kpi_card(col, label, value, sub=None, sub_class="fx-note", big=False,
-             accent=None, spark=None):
+             accent=None, spark=None, help=None):
     cls = "fx-kpi" if big else "fx-kpi sm"
     card = "fx-card" + (f" acc-{accent}" if accent else "")
-    html = (f"<div class='{card}'><div class='fx-kpi-label'>{label}</div>"
+    if help:
+        lab_html = (f"<div class='fx-kpi-label' title=\"{help}\">{label} "
+                    f"<span style='opacity:0.5'>&#9432;</span></div>")
+    else:
+        lab_html = f"<div class='fx-kpi-label'>{label}</div>"
+    html = (f"<div class='{card}'>{lab_html}"
             f"<div class='{cls}'>{value}</div>")
     if sub is not None:
         html += f"<div class='{sub_class}'>{sub}</div>"
@@ -502,9 +539,9 @@ elif page == "Compare funds":
     kpi_card(c[3], "Its max drawdown", f"{best['max_drawdown']:.1%}")
 
     st.markdown("<hr class='fx-divider'>", unsafe_allow_html=True)
-    tab_tbl, tab_map, tab_gro, tab_conf = st.tabs(
+    tab_tbl, tab_map, tab_gro, tab_corr, tab_conf = st.tabs(
         ["Fact-sheet table", "Risk vs return", "Growth of $1",
-         "How sure are we?"])
+         "Diversification", "How sure are we?"])
 
     with tab_tbl:
         tbl = view[["label", "family", "ann_return", "ann_vol", scol,
@@ -593,6 +630,36 @@ elif page == "Compare funds":
         bfig.update_xaxes(title=f"{stitle} (rf = 0)")
         st.plotly_chart(bfig, width="stretch")
 
+    with tab_corr:
+        cids = list(view.index)
+        if len(cids) < 2:
+            st.info("Pick at least two funds to see how they co-move.")
+        else:
+            corr = RET[cids].dropna(how="all").corr()
+            labels = [label_of[i] for i in corr.columns]
+            off = corr.values[~np.eye(len(corr), dtype=bool)]
+            avg_off = float(np.nanmean(off))
+            hfig = base_fig("Return correlation across the selected funds", "",
+                            height=140 + 40 * len(cids))
+            hfig.add_trace(go.Heatmap(
+                z=corr.values, x=labels, y=labels,
+                colorscale=[[0.0, FX["teal"]], [0.5, FX["panel2"]],
+                            [1.0, FX["coral"]]],
+                zmin=-1, zmax=1, xgap=2, ygap=2,
+                texttemplate="%{z:.2f}", textfont=dict(size=10),
+                hovertemplate="%{y} vs %{x}: %{z:.2f}<extra></extra>",
+                colorbar=dict(title="ρ", outlinewidth=0,
+                              tickfont=dict(color=FX["mute"]))))
+            hfig.update_xaxes(tickangle=-40)
+            st.plotly_chart(hfig, width="stretch")
+            st.markdown(
+                "<span class='fx-note'>Coral cells move together; teal cells "
+                "pull in opposite directions. The average off-diagonal "
+                f"correlation here is <b>{avg_off:.2f}</b> - the lower it is, "
+                "the more these funds diversify each other, which is exactly "
+                "what lets a blend cut risk without giving up much return."
+                "</span>", unsafe_allow_html=True)
+
     with tab_conf:
         bs = A["bootstrap"]
         if bs is None:
@@ -666,16 +733,23 @@ elif page == "Fund fact sheet":
     c = st.columns(5)
     kpi_card(c[0], "Growth of $1", f"${m['growth']:.2f}", big=True,
              accent="teal")
-    kpi_card(c[1], "Ann. return", f"{m['ann_ret']:.1%}")
-    kpi_card(c[2], "Ann. volatility", f"{m['ann_vol']:.1%}")
-    kpi_card(c[3], "Sharpe (rf=0)", f"{m['sharpe']:.2f}")
-    kpi_card(c[4], "Max drawdown", f"{m['mdd']:.1%}", accent="coral")
+    kpi_card(c[1], "Ann. return", f"{m['ann_ret']:.1%}",
+             help="Average yearly growth rate over the window.")
+    kpi_card(c[2], "Ann. volatility", f"{m['ann_vol']:.1%}",
+             help="How much returns swing year to year - higher means a "
+                  "bumpier ride.")
+    kpi_card(c[3], "Sharpe (rf=0)", f"{m['sharpe']:.2f}",
+             help="Return per unit of risk (return divided by volatility). "
+                  "Higher is better; above ~1 is strong.")
+    kpi_card(c[4], "Max drawdown", f"{m['mdd']:.1%}", accent="coral",
+             help="The worst peak-to-trough fall over the window. Closer to "
+                  "zero is safer.")
 
     bench_id = f"{p['family']}_equal_weight"
     can_bench = bench_id in RET.columns and bench_id != fid
 
-    tab_perf, tab_hold, tab_cal = st.tabs(
-        ["Performance", "Holdings", "Calendar returns"])
+    tab_perf, tab_risk, tab_hold, tab_cal = st.tabs(
+        ["Performance", "Risk over time", "Holdings", "Calendar returns"])
 
     with tab_perf:
         show_bench = st.toggle(
@@ -701,6 +775,7 @@ elif page == "Fund fact sheet":
                 line=dict(color=FX["gold"], width=1.8, dash="dash"),
                 hovertemplate="%{y:$.2f}<extra>"
                               + label_of[bench_id] + "</extra>"))
+        add_events(fig, p["family"], g.index.min(), g.index.max())
         c1.plotly_chart(fig, width="stretch")
 
         dd = drawdown(r) * 100
@@ -719,6 +794,50 @@ elif page == "Fund fact sheet":
                         f"Sharpe is {m['sharpe']:.2f} vs the benchmark's "
                         f"{mb['sharpe']:.2f} - {abs(diff):.2f} {word} the "
                         f"no-estimation rule.</span>", unsafe_allow_html=True)
+
+    with tab_risk:
+        af = int(p["ann_factor"])
+        win_v = max(21, af // 4)          # ~ one quarter
+        win_s = af                        # ~ one year
+        if len(r) < win_v + 5:
+            st.info("Zoom to a wider window to see rolling risk "
+                    "(needs at least about a quarter of data).")
+        else:
+            c5, c6 = st.columns(2)
+            roll_vol = (r.rolling(win_v, min_periods=max(10, win_v // 2))
+                        .std(ddof=1) * np.sqrt(af) * 100)
+            vfig = base_fig(f"Rolling volatility ({win_v}-day, annualised)",
+                            "Volatility (%)")
+            vfig.add_trace(go.Scatter(
+                x=roll_vol.index, y=roll_vol, fill="tozeroy",
+                fillcolor="rgba(227,168,43,0.12)",
+                line=dict(color=FX["gold"], width=2), name="Vol",
+                hovertemplate="%{y:.1f}%<extra></extra>"))
+            vi = roll_vol.dropna().index
+            if len(vi):
+                add_events(vfig, p["family"], vi.min(), vi.max())
+            c5.plotly_chart(vfig, width="stretch")
+
+            rmean = r.rolling(win_s, min_periods=max(30, win_s // 2)).mean() * af
+            rstd = (r.rolling(win_s, min_periods=max(30, win_s // 2))
+                    .std(ddof=1) * np.sqrt(af))
+            roll_sh = rmean / rstd
+            sfig = base_fig(f"Rolling Sharpe ({win_s}-day, rf = 0)", "Sharpe")
+            sfig.add_hline(y=0, line_color=FX["steel"], line_width=1)
+            sfig.add_trace(go.Scatter(
+                x=roll_sh.index, y=roll_sh,
+                line=dict(color=FX["teal"], width=2), name="Sharpe",
+                hovertemplate="%{y:.2f}<extra></extra>"))
+            si = roll_sh.dropna().index
+            if len(si):
+                add_events(sfig, p["family"], si.min(), si.max())
+            c6.plotly_chart(sfig, width="stretch")
+            st.markdown(
+                "<span class='fx-note'>A single headline Sharpe hides how much "
+                "it wandered. Where the rolling line dips below zero the fund "
+                "was losing money over that window; the dotted markers flag "
+                "the period's main stress events.</span>",
+                unsafe_allow_html=True)
 
     with tab_hold:
         W = A["weights"]
