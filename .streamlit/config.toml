@@ -3,3 +3,13 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+# FundX brand theme (own design system, evolved from src/plotstyle.py) so
+# native widgets - dropdowns, toggles, dataframes, popovers - match the app.
+[theme]
+base = "dark"
+primaryColor = "#2BC4C4"
+backgroundColor = "#0B1C2C"
+secondaryBackgroundColor = "#12283F"
+textColor = "#EAF1F8"
+font = "sans serif"
