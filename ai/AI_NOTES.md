@@ -1,29 +1,15 @@
-# AI notes - how I directed and checked AI in Part B (z5544937)
+# AI notes - Part B
 
-## My workflow in one paragraph
-I set the rules first in `CLAUDE.md` and used my own Part A code as the foundation rather than letting the assistant rebuild Stations 1-2. Claude drafted most of the new Part B code and app scaffolding, but I ran the project on the real course data, compared the results back to my Part A anchors, checked the no-look-ahead mechanics and recomputed a fund from the saved returns. At the final report stage I also used ChatGPT as a second assistant: I gave it my handover plus the current project zip and had it assemble and format a report draft only from the results already produced. That late-stage use is recorded in `prompt_log_02_final_report_handover.md`. The final claims I keep are the ones supported by my CSVs/figures and the checks below.
+Claude was the main AI tool I used. Its main role was helping generate and debug Part B code and speed up the app implementation.
 
-## Where AI genuinely helped
-The biggest saving was scaffolding. Building 17 walk-forward funds, two sentiment models over 146,836 headlines, the fusion test, figures and a seven-page Streamlit app would have taken much longer to wire manually. It also helped catch implementation traps that are easy to miss, especially the SLSQP scaling problem where tiny daily means/covariances can make different optimisers return almost identical weights. The assistant also kept the exact required artifact names consistent between the build script and the app and helped carry the same FundX visual system across the figures and Streamlit interface. In the final stage, ChatGPT was useful for turning the already-verified results into a coherent report structure and for checking that every required exhibit was referenced.
+I did not treat AI-generated test results as final. I reran the project on the real course data and checked the outputs myself.
 
-## Where AI was wrong or risky, and what I did
-The main risk was that Claude could not access the course data from its sandbox, so its first end-to-end run used a synthetic stand-in. I treated every number from that run as provisional and reran the pipeline on the real data before using any result. Before it had my Part A zip it also reconstructed my Part A pipeline from the report rather than from my actual code. I replaced those reconstructions with my real `src/etl.py` and `src/features.py` and rewired the new code to their actual function signatures. A separate solver issue could have silently made the optimisation methods look the same; the final pipeline annualises/scales inputs and asserts that the methods produce genuinely different weights. I also did not accept the finance lexicon as generated: AI proposed candidates, but the shipping valences are curated rather than treated as ground truth. Finally, the real-data run showed that the sentiment tilt underperformed, so I kept the negative result instead of tuning the rule until it looked better.
+My checks included:
+- Part A data anchors
+- no-look-ahead behaviour
+- direct recomputation of selected fund metrics
+- sentiment and portfolio outputs
+- all seven Streamlit pages
+- the final hand-in checker
 
-One issue I specifically checked outside the assistant's normal output was look-ahead. I planted a +60% return on a rebalance date and confirmed the target weights at that same date were unchanged. That falsification test matters more to me than simply reading the slice in the code because it tests the behaviour of the whole backtest.
-
-## What I deliberately did NOT delegate
-The model design choices are mine: long-only/fully invested; explicit 20% caps for Minimum Variance and Maximum Sharpe (40% crypto-only), with Equal Weight below them by construction and ERC/HRP left unclipped to preserve their defining rules; monthly rebalance; 252/365-day windows; zero risk-free rate; the five portfolio methods; the 10 bps turnover cost assumption; and the sentiment-tilt rule. I also made the decision not to claim that Fin-VADER creates alpha when the downstream result says otherwise. AI helped with report organisation and wording at the end, but the submission should only retain interpretations that I have checked against my own tables and figures.
-
-## Verification checklist I ran
-- [x] 18 Aug 2026 - real-data outputs reproduce the Part A anchors: 146,836 deduplicated headlines / 2,847 duplicates, 50,300 equity rows and 1,006 trading days.
-- [x] 18 Aug 2026 - plain VADER neutral share is 49.6%; Fin-VADER is 45.2%, matching the Part A prediction that roughly half would be neutral under plain VADER.
-- [x] 18 Aug 2026 - look-ahead falsification test: a planted +60% return at rebalance date t leaves weights at t unchanged.
-- [x] 18 Aug 2026 - independently recomputed Combined Risk Parity from `fund_returns.csv`: annualised return 0.140, volatility 0.162, Sharpe 0.862, max drawdown -0.195 and growth of $1 1.478, matching `performance_metrics.csv`.
-- [x] 18 Aug 2026 - reviewed the real-data figures and recorded the main drawdown/weight/sentiment readings used in the report.
-- [x] 18 Aug 2026 - all seven Streamlit pages were exception-tested and the deployed app was checked in an incognito browser session during the build.
-- [x] 18 Aug 2026 - `python scripts/check_handin.py` returns 22 checks passed (plus one non-failing cleanup reminder) before final packaging.
-- [x] 19 Aug 2026 - after deleting generated caches and completing the final consistency fixes, `python scripts/check_handin.py` returns 23 checks passed with no warnings.
-- [x] 19 Aug 2026 - reviewed the sentiment predictive-content diagnostic: n = 9,800 sector-day observations, Pearson IC = -0.043 and Spearman IC = -0.023; treated as near zero/economically negligible, with no formal significance claim.
-
-## What changed between synthetic and real data
-The biggest change was the size of the sentiment result. On the synthetic stand-in the finance lexicon appeared to have a much larger downstream effect. On the real data it clearly improves measurement - neutral share falls from 49.6% to 45.2% and the score distribution widens - but it does not improve performance: the Fin-VADER tilt Sharpe is 0.342 versus 0.344 for the plain-VADER tilt. The real data therefore changed the story from "the extension helps the fund" to "the extension helps classification but not the fund under this fusion rule". I kept that negative finding because it is the more credible result.
+Near the end, I also used ChatGPT to cross-check my report from results and figures that had already been produced. I reviewed the final wording, numerical claims and economic interpretations myself.

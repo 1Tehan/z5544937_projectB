@@ -1,11 +1,9 @@
-# AI workflow pack (graded)
+# AI workflow pack
 
-This folder contains the curated AI-use evidence for Part B. The brief rewards completeness, critical evaluation, appropriate use and honesty - not raw prompt volume.
+This folder briefly records how AI was used in Part B.
 
-Submitted evidence:
-- `AI_NOTES.md` - my reflective account of where AI helped, where it was wrong, and how I checked it.
-- `prompt_log_01_part_b_build.md` - the main Part B build, real-data verification and corrections.
-- `prompt_log_02_final_report_handover.md` - the disclosed late-stage ChatGPT report/formatting assistance and my checks.
-- `prompt_log_03_final_consistency_audit.md` - the final brief/rubric/code/report consistency audit and corrections.
+Claude was used mainly to help generate and debug new Part B code. I made the modelling decisions, reran the project on the real course data and verified the final outputs myself.
 
-My own agent instruction file is `CLAUDE.md` at the project root. There is no unused prompt-log template in the hand-in folder.
+ChatGPT was used only at the late report stage to help assemble/format existing material and check it against the saved project outputs.
+
+The final wording, numerical claims and economic interpretations were reviewed and finalised by me.
